@@ -10,7 +10,7 @@ Inductive aexp : Type :=
   | AMinus (a1 a2 : aexp)
   | AMult (a1 a2 : aexp).
 
-(* Evaluation function, recursive definition *)
+(* Evaluation, recursive definition *)
 Fixpoint aeval (st : state) (a : aexp) {struct a} : nat :=
   match a with
   | ANum n => n
@@ -33,7 +33,7 @@ Proof.
   reflexivity. 
 Qed.
 
-(* Evaluation relational, recursive definition *)
+(* Evaluation, relational definition *)
 Inductive aevalR : state -> aexp -> nat -> Prop :=
   | E_ANum (st: state) (n : nat) :
       aevalR st (ANum n) n

@@ -8,7 +8,7 @@ Inductive com : Type :=
   | CConcat (c1 c2 : com)
   | CIf (b : bexp) (c1 c2 : com)
   | CWhile (b : bexp) (c : com)
-  | CRepeat (b : bexp) (c: com).
+  | CRepeat (b : bexp) (c : com).
 
 Module ImpNotations.
 
@@ -55,7 +55,7 @@ Notation "'repeat' x 'until' y 'end'" :=
       (in custom com at level 89, x at level 99, y at level 99) : com_scope.
 
 Reserved Notation
-  "'[' c ','  st ']' '=>' st'"
+  "'[' c ','  st ']' '=' st'"
   (at level 40, c custom com at level 99,
     st constr, st' constr at next level).
 
@@ -73,43 +73,44 @@ Definition z : string := "Z".
 (* command evaluation *)
 Inductive ceval : com -> state -> state -> Prop :=
   | E_Skip : forall st,
-      [ skip, st ] => st
+      [ skip, st ] = st
   | E_Asgn : forall st a n x,
       aeval st a = n ->
-      [ x := a, st ] => (x !-> n ; st)
+      [ x := a, st ] = (x !-> n ; st)
   | E_Seq : forall c1 c2 st st' st'',
-      [ c1, st ] => st'' ->
-      [ c2, st'' ] => st' ->
-      [ c1 ; c2, st ] => st'
+      [ c1, st ] = st'' ->
+      [ c2, st'' ] = st' ->
+      [ c1 ; c2, st ] = st'
   | E_If : forall st st' b c1 c2,
       beval st b = true /\
-      [ c1, st ] => st' \/
+      [ c1, st ] = st' \/
       beval st b = false /\
-      [ c2, st ] => st' ->
-      [ if b then c1 else c2 end, st] => st'
+      [ c2, st ] = st' ->
+      [ if b then c1 else c2 end, st] = st'
   | E_While : forall st st' st'' b c,
       beval st b = true /\
-      [ c, st ] => st'' /\
-      [ while b do c end, st'' ] => st' \/
+      [ c, st ] = st'' /\
+      [ while b do c end, st'' ] = st' \/
       beval st b = false /\
       st = st' ->
-      [ while b do c end, st ] => st'
+      [ while b do c end, st ] = st'
   | E_Repeat : forall st st' st'' b c,
       beval st b = true /\
-      [ c, st ] => st'' /\
-      [ repeat c until b end, st'' ] => st' \/
+      [ c, st ] = st'' /\
+      [ repeat c until b end, st'' ] = st' \/
       beval st b = false /\
-      [ c, st ] => st' ->
-      [ repeat c until b end, st ] => st'
-  where "'[' c ',' st ']' '=>' st'" := (ceval c st st').
+      [ c, st ] = st' ->
+      [ repeat c until b end, st ] = st'
+  where "'[' c ',' st ']' '=' st'" := (ceval c st st').
 
 Example ceval_example1:
   [ x := 2;
     if (x <= 1)
       then y := 3
       else z := 4
-    end, empty_st
-  ] =>
+    end, 
+    empty_st
+  ] =
   (z !-> 4 ; x !-> 2).
 Proof.
   apply E_Seq with (x !-> 2).
@@ -124,7 +125,7 @@ Proof.
 Qed.
 
 Lemma if_nop : forall b st,
-  [if b then skip else skip end, st] => st.
+  [if b then skip else skip end, st] = st.
 Proof.
   intros. apply E_If. induction beval.
   1: left; split.
