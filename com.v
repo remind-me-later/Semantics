@@ -149,19 +149,24 @@ Proof.
 Qed.
 
 (* exercise 2.7 *)
-Lemma unfold_repeat_true : forall b c st st',
-  beval st' b = true ->
-  [c,st] = st' ->
+Lemma unfold_repeat: forall b c st st' stf, 
   let r := <{repeat c until b end}> in
-  [ c; if b then skip else r end, st ] = st' <->
-  [ r, st ] = st'.
+  [c, st] = st' ->      (* initial state goes to first *)
+  st' = stf ->          (* final state may be first *)
+  beval stf b = true -> (* final state evaluates to true *)
+  [ r, st' ] = stf ->   (* induction hypothesis *)
+  [ c; if b then skip else r end, st ] = stf <->
+  [ r, st ] = stf.
 Proof.
-  intros. split.
-  - intros.
-    apply E_Repeat with st'.
-    rewrite H. right. split. exact H0. reflexivity.
-  - intros. apply E_Concat with st'. exact H0.
-    apply E_If. left. split. exact H. constructor.
+  intros. split; intros.
+  - apply E_Repeat with stf.
+    right. split.
+    replace stf with st'.
+    exact H. exact H1.
+  - apply E_Concat with stf.
+    rewrite <- H0. exact H.
+    apply E_If. left. split.
+    exact H1. constructor.
 Qed.
 
 (*
