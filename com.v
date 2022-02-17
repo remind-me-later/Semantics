@@ -2,6 +2,8 @@ Require Export state. Import StateNotations.
 Require Export aexp.
 Require Export bexp.
 
+From Coq Require Import Bool.Bool.
+
 Inductive com : Type :=
   | CNop
   | CAsgn (x : string) (a : aexp)
@@ -92,14 +94,14 @@ Inductive ceval : com -> state -> state -> Prop :=
       [ c, st ] = st'' /\
       [ while b do c end, st'' ] = st' \/
       beval st b = false /\
-      st = st' ->
+      [skip, st] = st' ->
       [ while b do c end, st ] = st'
   | E_Repeat : forall st st' st'' b c,
-      beval st b = true /\
       [ c, st ] = st'' /\
+      beval st'' b = false /\
       [ repeat c until b end, st'' ] = st' \/
-      beval st b = false /\
-      [ c, st ] = st' ->
+      [ c, st ] = st' /\
+      beval st' b = true ->
       [ repeat c until b end, st ]= st'
   where "'[' c ',' st ']' '=' st'" := (ceval c st st').
 
@@ -134,32 +136,37 @@ Proof.
   all: constructor.
 Qed.
 
-(*
 Lemma repeat_equiv_c : forall b c (st st' st'': state),
-  [ repeat c until b end, st] = st' <-> [c, st] = st' ->
-  beval st b = false.
+  [c, st] = st' ->
+  beval st' b = true ->
+  [ repeat c until b end, st] = st'.
 Proof.
   intros.
-  induction 
+  simple apply E_Repeat with st'.
+  rewrite H0.
+  right. split.
+  exact H. reflexivity.
+Qed.
 
 (* exercise 2.7 *)
-Lemma unfold_repeat : forall b c st st',
+Lemma unfold_repeat_true : forall b c st st',
+  beval st' b = true ->
+  [c,st] = st' ->
   let r := <{repeat c until b end}> in
-  [ r, st ] = st' <->
-  [ c; if b then skip else r end, st ] = st'.
+  [ c; if b then skip else r end, st ] = st' <->
+  [ r, st ] = st'.
 Proof.
-  intros.
-  split. 
+  intros. split.
   - intros.
-    f_equal.
-    induction H.
+    apply E_Repeat with st'.
+    rewrite H. right. split. exact H0. reflexivity.
+  - intros. apply E_Concat with st'. exact H0.
+    apply E_If. left. split. exact H. constructor.
+Qed.
 
+(*
 (* proposition 2.8 *)
 Lemma while_equiv_if : forall b c st st',
   let w := <{while b do c end}> in
   [w, st] => st' <-> [ if b then c; w else skip end, st] => st'.
-Proof.
-  intros.
-  induction w0.
-  - split; intros. constructor. 
-*)
+Proof. *)
