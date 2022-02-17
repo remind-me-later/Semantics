@@ -153,7 +153,6 @@ Lemma unfold_repeat: forall b c st st',
   let r := <{repeat c until b end}> in
   [c, st] = st' ->      (* initial state goes to last *)
   beval st' b = true -> (* final state evaluates to true *)
-  [ r, st' ] = st' ->   (* induction hypothesis *)
   [ c; if b then skip else r end, st ] = st' <->
   [ r, st ] = st'.
 Proof.
