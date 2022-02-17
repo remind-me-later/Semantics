@@ -72,12 +72,12 @@ Definition z : string := "Z".
 
 (* command evaluation *)
 Inductive ceval : com -> state -> state -> Prop :=
-  | E_Skip : forall st,
+  | E_Nop : forall st,
       [ skip, st ] = st
-  | E_Asgn : forall st a n x,
+  | E_Assign : forall st a n x,
       aeval st a = n ->
       [ x := a, st ] = (x !-> n ; st)
-  | E_Seq : forall c1 c2 st st' st'',
+  | E_Concat : forall c1 c2 st st' st'',
       [ c1, st ] = st'' ->
       [ c2, st'' ] = st' ->
       [ c1 ; c2, st ] = st'
@@ -100,7 +100,7 @@ Inductive ceval : com -> state -> state -> Prop :=
       [ repeat c until b end, st'' ] = st' \/
       beval st b = false /\
       [ c, st ] = st' ->
-      [ repeat c until b end, st ] = st'
+      [ repeat c until b end, st ]= st'
   where "'[' c ',' st ']' '=' st'" := (ceval c st st').
 
 Example ceval_example1:
@@ -113,14 +113,14 @@ Example ceval_example1:
   ] =
   (z !-> 4 ; x !-> 2).
 Proof.
-  apply E_Seq with (x !-> 2).
-  - apply E_Asgn. 
+  apply E_Concat with (x !-> 2).
+  - apply E_Assign. 
     reflexivity.
 
   - apply E_If.
     simpl.
     right. split. reflexivity.
-    apply E_Asgn.
+    apply E_Assign.
     reflexivity.
 Qed.
 
@@ -134,15 +134,25 @@ Proof.
   all: constructor.
 Qed.
 
-(* TODO:
+(*
+Lemma repeat_equiv_c : forall b c (st st' st'': state),
+  [ repeat c until b end, st] = st' <-> [c, st] = st' ->
+  beval st b = false.
+Proof.
+  intros.
+  induction 
+
 (* exercise 2.7 *)
 Lemma unfold_repeat : forall b c st st',
   let r := <{repeat c until b end}> in
-  [ r, st ] => st' <-> 
-  [ c; if b then skip else r end, st ] => st'.
+  [ r, st ] = st' <->
+  [ c; if b then skip else r end, st ] = st'.
 Proof.
-  intros. split.
+  intros.
+  split. 
   - intros.
+    f_equal.
+    induction H.
 
 (* proposition 2.8 *)
 Lemma while_equiv_if : forall b c st st',
@@ -151,4 +161,5 @@ Lemma while_equiv_if : forall b c st st',
 Proof.
   intros.
   induction w0.
-  - split; intros. constructor. *)
+  - split; intros. constructor. 
+*)
