@@ -3,6 +3,7 @@ Require Export aexp.
 Require Export bexp.
 
 From Coq Require Import Bool.Bool.
+From Coq Require Import Arith.EqNat. Import Nat.
 
 Inductive com : Type :=
   | CNop
@@ -57,7 +58,7 @@ Notation "'repeat' x 'until' y 'end'" :=
       (in custom com at level 89, x at level 99, y at level 99) : com_scope.
 
 Reserved Notation
-  "'[' c ','  st ']' '=' st'"
+  "'[' c ','  st ']' '~>' st'"
   (at level 40, c custom com at level 99,
     st constr, st' constr at next level).
 
@@ -66,44 +67,44 @@ End ImpNotations.
 Import ImpNotations.
 Open Scope com_scope.
 
+(* variable shorthands *)
 Definition w : string := "W".
 Definition x : string := "X".
 Definition y : string := "Y".
 Definition z : string := "Z".
 
-
 (* command evaluation *)
 Inductive ceval : com -> state -> state -> Prop :=
   | E_Nop : forall st,
-      [ skip, st ] = st
+      [ skip, st ] ~> st
   | E_Assign : forall st a n x,
       aeval st a = n ->
-      [ x := a, st ] = (x !-> n ; st)
+      [ x := a, st ] ~> (x !-> n ; st)
   | E_Concat : forall c1 c2 st st' st'',
-      [ c1, st ] = st'' ->
-      [ c2, st'' ] = st' ->
-      [ c1 ; c2, st ] = st'
+      [ c1, st ] ~> st'' ->
+      [ c2, st'' ] ~> st' ->
+      [ c1 ; c2, st ] ~> st'
   | E_If : forall st st' b c1 c2,
       beval st b = true /\
-      [ c1, st ] = st' \/
+      [ c1, st ] ~> st' \/
       beval st b = false /\
-      [ c2, st ] = st' ->
-      [ if b then c1 else c2 end, st] = st'
+      [ c2, st ] ~> st' ->
+      [ if b then c1 else c2 end, st] ~> st'
   | E_While : forall st st' st'' b c,
       beval st b = true /\
-      [ c, st ] = st'' /\
-      [ while b do c end, st'' ] = st' \/
+      [ c, st ] ~> st'' /\
+      [ while b do c end, st'' ] ~> st' \/
       beval st b = false /\
-      [skip, st] = st' ->
-      [ while b do c end, st ] = st'
+      st = st' ->
+      [ while b do c end, st ] ~> st'
   | E_Repeat : forall st st' st'' b c,
-      [ c, st ] = st'' /\
+      [ c, st ] ~> st'' /\
       beval st'' b = false /\
-      [ repeat c until b end, st'' ] = st' \/
-      [ c, st ] = st' /\
+      [ repeat c until b end, st'' ] ~> st' \/
+      [ c, st ] ~> st' /\
       beval st' b = true ->
-      [ repeat c until b end, st ]= st'
-  where "'[' c ',' st ']' '=' st'" := (ceval c st st').
+      [ repeat c until b end, st ] ~> st'
+  where "'[' c ',' st ']' '~>' st'" := (ceval c st st').
 
 Example ceval_example1:
   [ x := 2;
@@ -112,7 +113,7 @@ Example ceval_example1:
       else z := 4
     end, 
     empty_st
-  ] =
+  ] ~>
   (z !-> 4 ; x !-> 2).
 Proof.
   apply E_Concat with (x !-> 2).
@@ -127,7 +128,7 @@ Proof.
 Qed.
 
 Lemma if_nop : forall b st,
-  [if b then skip else skip end, st] = st.
+  [if b then skip else skip end, st] ~> st.
 Proof.
   intros. apply E_If. induction beval.
   1: left; split.
@@ -137,9 +138,9 @@ Proof.
 Qed.
 
 Lemma repeat_equiv_c : forall b c (st st' st'': state),
-  [c, st] = st' ->
+  [c, st] ~> st' ->
   beval st' b = true ->
-  [ repeat c until b end, st] = st'.
+  [ repeat c until b end, st] ~> st'.
 Proof.
   intros.
   simple apply E_Repeat with st'.
@@ -148,13 +149,63 @@ Proof.
   exact H. reflexivity.
 Qed.
 
+(* exercise 2.6, part 1 *)
+Lemma concat_associative: 
+  forall (c c' c'' : com)
+         (st st' st'' st''': state),
+  [c , st] ~> st''' ->
+  [c', st'''] ~> st'' ->
+  [c'', st''] ~> st' ->
+
+  [(c; c'); c'', st] ~> st' <->
+  [c;(c'; c''), st] ~> st'.
+Proof.
+  intros. split; intros.
+  - apply E_Concat with st'''.
+    exact H. 
+    apply E_Concat with st''.
+    exact H0. exact H1.
+  - apply E_Concat with st''.
+    apply E_Concat with st'''.
+    exact H. exact H0. exact H1.
+Qed.
+
+(* exercise 2.6, part 2 *)
+Lemma concat_not_commutative: 
+  exists (c c' c'' : com)
+         (st0 st1 st2 st3 st4: state)
+         x,
+  [c, st0] ~> st2 ->
+  [c', st2] ~> st1 ->
+  [c', st0] ~> st3 ->
+  [c, st3] ~> st4 ->
+  [c; c', st0] ~> st1 ->
+  [c'; c, st0] ~> st2 ->
+
+  st1 x <> st2 x.
+Proof.
+  exists <{ x := 2 }>.
+  exists <{ x := 1 }>.
+  exists <{ skip }>.
+  exists empty_st.
+  exists (x !-> 1).
+  exists (x !-> 2).
+  exists (x !-> 1).
+  exists (x !-> 2).
+  exists x.
+  intros.
+  apply (beq_nat_false ((x !-> 1) x) ((x !-> 2) x)).
+  reflexivity.
+Qed.
+
 (* exercise 2.7 *)
 Lemma unfold_repeat: forall b c st st', 
   let r := <{repeat c until b end}> in
-  [c, st] = st' ->      (* initial state goes to last *)
-  beval st' b = true -> (* final state evaluates to true *)
-  [ c; if b then skip else r end, st ] = st' <->
-  [ r, st ] = st'.
+  [c, st] ~> st' ->      (* initial state goes to last *)
+  beval st' b = true -> (* last state evaluates to true *)
+
+  [ c; if b then skip else r end, st ] ~> st' <->
+  [ r, st ] ~> st'.
 Proof.
   intros. split; intros.
   - apply E_Repeat with st'.
@@ -166,9 +217,51 @@ Proof.
     exact H0. constructor.
 Qed.
 
-(*
-(* proposition 2.8 *)
-Lemma while_equiv_if : forall b c st st',
+Lemma while_unfold : forall b c st st',
   let w := <{while b do c end}> in
-  [w, st] => st' <-> [ if b then c; w else skip end, st] => st'.
-Proof. *)
+  st = st' ->            (* Initial state may be last *)
+  [c, st] ~> st' ->      (* initial state goes to last *)
+  beval st' b = false -> (* last state evaluates to false *)
+  
+  [w, st] ~> st' <-> 
+  [ if b then c; w else skip end, st] ~> st'.
+Proof.
+  intros. split; intros.
+  - apply E_If.
+    induction (eqb_spec (beval st b) true).
+    left. split. exact p. 
+    apply E_Concat with st'.
+    exact H0.
+    apply E_While with st'.
+    right. split. exact H1. reflexivity.
+
+    right. split. apply not_true_iff_false in n.
+    exact n. rewrite H. constructor.
+  
+  - apply E_While with st'.
+    induction (eqb_spec (beval st b) true).
+    left. split. exact p. split. exact H0.
+    apply E_While with st'.
+    right. split. exact H1. reflexivity.
+
+    right. split. apply not_true_iff_false in n.
+    exact n. rewrite H. constructor.
+Qed.
+
+(* exercise 2.8 *)
+Lemma repeat_equiv_while : forall b c st st',
+  [c, st] ~> st' ->
+  beval st' b = true ->
+
+  [ c; while ~b do c end, st ] ~> st' <-> 
+  [ repeat c until b end, st ] ~> st'.
+Proof.
+  intros. split; intros.
+  - apply E_Repeat with st'.
+    right. split. exact H. exact H0.
+  - apply E_Concat with st'.
+    exact H. apply E_While with st'.
+    right. split. apply bev_not_true_iff_false.
+    rewrite <- H0. apply bev_negb_involutive.
+    reflexivity.
+Qed.

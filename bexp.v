@@ -2,6 +2,7 @@ Require Export state.
 Import StateNotations.
 Require Export aexp.
 
+From Coq Require Import Bool.Bool.
 From Coq Require Import Arith.EqNat. Import Nat.
 
 Inductive bexp : Type :=
@@ -71,4 +72,24 @@ Proof.
     1: constructor.
     apply IHe1. reflexivity.
     apply IHe2. reflexivity.
+Qed.
+
+Theorem bev_not_true_iff_false: forall b st,
+  beval st b = false <-> beval st (BNot b) = true.
+Proof.
+  intros. split; intros.
+  - unfold beval.
+    apply negb_true_iff.
+    exact H.
+  - unfold beval.
+    apply negb_true_iff.
+    exact H.
+Qed.
+    
+Lemma bev_negb_involutive : forall b st,
+  beval st (BNot (BNot b)) = beval st b.
+Proof.
+  intros.
+  unfold beval.
+  apply negb_involutive.
 Qed.
