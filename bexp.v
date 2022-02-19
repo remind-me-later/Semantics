@@ -93,3 +93,7 @@ Proof.
   unfold beval.
   apply negb_involutive.
 Qed.
+
+Definition bequiv (b1 b2 : bexp) : Prop :=
+  forall (st : state),
+    beval st b1 = beval st b2.

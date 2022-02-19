@@ -75,7 +75,7 @@ Definition z : string := "Z".
 
 (* command evaluation *)
 Inductive ceval : com -> state -> state -> Prop :=
-  | E_Nop : forall st,
+  | E_Skip : forall st,
       [ skip, st ] ~> st
   | E_Assign : forall st a n x,
       aeval st a = n ->
@@ -84,26 +84,32 @@ Inductive ceval : com -> state -> state -> Prop :=
       [ c1, st ] ~> st'' ->
       [ c2, st'' ] ~> st' ->
       [ c1 ; c2, st ] ~> st'
-  | E_If : forall st st' b c1 c2,
-      beval st b = true /\
-      [ c1, st ] ~> st' \/
-      beval st b = false /\
+  | E_IfTrue : forall st st' b c1 c2,
+      beval st b = true ->
+      [ c1, st ] ~> st' ->
+      [ if b then c1 else c2 end, st] ~> st'
+  | E_IfFalse : forall st st' b c1 c2,
+      beval st b = false ->
       [ c2, st ] ~> st' ->
       [ if b then c1 else c2 end, st] ~> st'
-  | E_While : forall st st' st'' b c,
-      beval st b = true /\
-      [ c, st ] ~> st'' /\
-      [ while b do c end, st'' ] ~> st' \/
-      beval st b = false /\
-      st = st' ->
+  | E_WhileFalse : forall st b c,
+      beval st b = false ->
+      [ while b do c end, st ] ~> st
+  | E_WhileTrue : forall st st' st'' b c,
+      beval st b = true ->
+      [ c, st ] ~> st'' ->
+      [ while b do c end, st'' ] ~> st' ->
       [ while b do c end, st ] ~> st'
-  | E_Repeat : forall st st' st'' b c,
-      [ c, st ] ~> st'' /\
-      beval st'' b = false /\
-      [ repeat c until b end, st'' ] ~> st' \/
-      [ c, st ] ~> st' /\
+  | E_RepeatTrue : forall st st' b c,
+      [ c, st ] ~> st' ->
       beval st' b = true ->
       [ repeat c until b end, st ] ~> st'
+  | E_RepeatFalse : forall st st' st'' b c,
+      [ c, st ] ~> st'' ->
+      beval st'' b = false ->
+      [ repeat c until b end, st'' ] ~> st' ->
+      [ repeat c until b end, st ] ~> st'
+
   where "'[' c ',' st ']' '~>' st'" := (ceval c st st').
 
 Example ceval_example1:
@@ -120,132 +126,129 @@ Proof.
   - apply E_Assign. 
     reflexivity.
 
-  - apply E_If.
-    simpl.
-    right. split. reflexivity.
+  - apply E_IfFalse.
+    reflexivity.
     apply E_Assign.
     reflexivity.
 Qed.
 
-Lemma if_nop : forall b st,
-  [if b then skip else skip end, st] ~> st.
+Definition cequiv (c1 c2 : com) : Prop :=
+  forall (st st' : state),
+    ([ c1, st ] ~> st') <-> ([ c2, st ] ~> st').
+
+Theorem skip_left : forall c,
+  cequiv
+    <{ skip; c }>
+    c.
 Proof.
-  intros. apply E_If. induction beval.
-  1: left; split.
-  3: right; split. 
-  1, 3: reflexivity.
-  all: constructor.
+  intros. 
+  split; intros.
+  - inversion H. subst.
+    inversion H2. subst.
+    exact H5.
+  - apply E_Concat with st.
+    apply E_Skip.
+    exact H.
 Qed.
 
-Lemma repeat_equiv_c : forall b c (st st' st'': state),
-  [c, st] ~> st' ->
-  beval st' b = true ->
-  [ repeat c until b end, st] ~> st'.
+Theorem skip_right : forall c,
+  cequiv <{ c ; skip }> c.
 Proof.
   intros.
-  simple apply E_Repeat with st'.
-  rewrite H0.
-  right. split.
-  exact H. reflexivity.
+  split; intros.
+  - inversion H. subst.
+    inversion H5. subst. 
+    exact H2.
+  - apply E_Concat with st'.
+    exact H. apply E_Skip.
+Qed.
+
+Theorem if_true: forall b c1 c2,
+  bequiv b <{true}> ->
+  cequiv
+    <{ if b then c1 else c2 end }>
+    c1.
+Proof.
+  intros b c1 c2 Hb.
+  split; intros H.
+  - inversion H. subst.
+    + assumption.
+    + unfold bequiv in Hb. simpl in Hb.
+      rewrite Hb in H5.
+      discriminate.
+  - apply E_IfTrue; try assumption.
+    unfold bequiv in Hb. simpl in Hb.
+    apply Hb. 
+Qed.
+
+Theorem while_unroll : forall b c,
+  cequiv
+    <{ while b do c end }>
+    <{ if b then c ; while b do c end else skip end }>.
+Proof.
+  intros b c st st'.
+  split; intros Hce.
+  - inversion Hce; subst.
+    + apply E_IfFalse. assumption. apply E_Skip.
+    + apply E_IfTrue. assumption.
+      apply E_Concat with st''. assumption. assumption.
+  - inversion Hce; subst.
+    + inversion H5; subst.
+      apply E_WhileTrue with st''.
+      assumption. assumption. assumption.
+    + inversion H5; subst. apply E_WhileFalse. assumption.
 Qed.
 
 (* exercise 2.6, part 1 *)
-Lemma concat_associative: 
-  forall (c c' c'' : com)
-         (st st' st'' st''': state),
-  [c , st] ~> st''' ->
-  [c', st'''] ~> st'' ->
-  [c'', st''] ~> st' ->
-
-  [(c; c'); c'', st] ~> st' <->
-  [c;(c'; c''), st] ~> st'.
+Lemma concat_associative: forall c c' c'',
+  cequiv <{(c; c'); c''}> <{c; (c'; c'')}>.
 Proof.
-  intros. split; intros.
-  - apply E_Concat with st'''.
-    exact H. 
+  intros c c' c'' st st'.  
+  split; intros.
+  - inversion H. subst.
+    inversion H2. subst.
+    apply E_Concat with st''0.
+    assumption.
     apply E_Concat with st''.
-    exact H0. exact H1.
-  - apply E_Concat with st''.
-    apply E_Concat with st'''.
-    exact H. exact H0. exact H1.
+    assumption. assumption.
+  - inversion H. subst.
+    inversion H5. subst.
+    apply E_Concat with st''0.
+    apply E_Concat with st''.
+    assumption. assumption. assumption.
 Qed.
 
 (* exercise 2.6, part 2 *)
-Lemma concat_not_commutative: 
-  exists (c c' c'' : com)
-         (st0 st1 st2 st3 st4: state)
-         x,
-  [c, st0] ~> st2 ->
-  [c', st2] ~> st1 ->
-  [c', st0] ~> st3 ->
-  [c, st3] ~> st4 ->
-  [c; c', st0] ~> st1 ->
-  [c'; c, st0] ~> st2 ->
-
-  st1 x <> st2 x.
+(* Lemma concat_not_commutative: exists c c',
+  cequiv <{c; c'}> <{c'; c}> = False.
 Proof.
   exists <{ x := 2 }>.
   exists <{ x := 1 }>.
-  exists <{ skip }>.
-  exists empty_st.
-  exists (x !-> 1).
-  exists (x !-> 2).
-  exists (x !-> 1).
-  exists (x !-> 2).
-  exists x.
+  unfold cequiv.
   intros.
-  apply (beq_nat_false ((x !-> 1) x) ((x !-> 2) x)).
-  reflexivity.
-Qed.
+  apply (iff_and in H.
+  inversion H.
+  
+Qed. *)
 
 (* exercise 2.7 *)
-Lemma unfold_repeat: forall b c st st', 
+Lemma repeat_unroll: forall b c, 
   let r := <{repeat c until b end}> in
-  [c, st] ~> st' ->      (* initial state goes to last *)
-  beval st' b = true -> (* last state evaluates to true *)
-
-  [ c; if b then skip else r end, st ] ~> st' <->
-  [ r, st ] ~> st'.
+  cequiv <{c; if b then skip else r end}> <{r}>.
 Proof.
-  intros. split; intros.
-  - apply E_Repeat with st'.
-    right. split.
-    exact H. exact H0.
-  - apply E_Concat with st'.
-    exact H.
-    apply E_If. left. split.
-    exact H0. constructor.
-Qed.
-
-Lemma while_unfold : forall b c st st',
-  let w := <{while b do c end}> in
-  st = st' ->            (* Initial state may be last *)
-  [c, st] ~> st' ->      (* initial state goes to last *)
-  beval st' b = false -> (* last state evaluates to false *)
-  
-  [w, st] ~> st' <-> 
-  [ if b then c; w else skip end, st] ~> st'.
-Proof.
-  intros. split; intros.
-  - apply E_If.
-    induction (eqb_spec (beval st b) true).
-    left. split. exact p. 
-    apply E_Concat with st'.
-    exact H0.
-    apply E_While with st'.
-    right. split. exact H1. reflexivity.
-
-    right. split. apply not_true_iff_false in n.
-    exact n. rewrite H. constructor.
-  
-  - apply E_While with st'.
-    induction (eqb_spec (beval st b) true).
-    left. split. exact p. split. exact H0.
-    apply E_While with st'.
-    right. split. exact H1. reflexivity.
-
-    right. split. apply not_true_iff_false in n.
-    exact n. rewrite H. constructor.
+  intros b c r st st'.
+  split; intros.
+  - inversion H. subst.
+    inversion H5. subst.
+    inversion H8. subst.
+    + apply E_RepeatTrue. assumption. assumption.
+    + subst. apply E_RepeatFalse with st''.
+      assumption. assumption. assumption.
+  - inversion H. subst.
+    + apply E_Concat with st'. assumption.
+      apply E_IfTrue. assumption. apply E_Skip.
+    + subst. apply E_Concat with st''. assumption.
+      apply E_IfFalse. assumption. assumption.
 Qed.
 
 (* exercise 2.8 *)

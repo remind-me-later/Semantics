@@ -70,3 +70,7 @@ Proof.
     4, 5, 6: apply IHa2.
     all: reflexivity.
 Qed.
+
+Definition aequiv (a1 a2 : aexp) : Prop :=
+  forall st : state,
+    aeval st a1 = aeval st a2.
