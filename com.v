@@ -77,9 +77,8 @@ Definition z : string := "Z".
 Inductive ceval : com -> state -> state -> Prop :=
   | E_Skip : forall st,
       [ skip, st ] ~> st
-  | E_Assign : forall st a n x,
-      aeval st a = n ->
-      [ x := a, st ] ~> (x !-> n ; st)
+  | E_Assign : forall st a x,
+      [ x := a, st ] ~> (x !-> aeval st a; st)
   | E_Concat : forall c1 c2 st st' st'',
       [ c1, st ] ~> st'' ->
       [ c2, st'' ] ~> st' ->
@@ -109,7 +108,6 @@ Inductive ceval : com -> state -> state -> Prop :=
       beval st'' b = false ->
       [ repeat c until b end, st'' ] ~> st' ->
       [ repeat c until b end, st ] ~> st'
-
   where "'[' c ',' st ']' '~>' st'" := (ceval c st st').
 
 Example ceval_example1:
@@ -124,12 +122,10 @@ Example ceval_example1:
 Proof.
   apply E_Concat with (x !-> 2).
   - apply E_Assign. 
-    reflexivity.
 
   - apply E_IfFalse.
     reflexivity.
     apply E_Assign.
-    reflexivity.
 Qed.
 
 Definition cequiv (c1 c2 : com) : Prop :=
@@ -181,6 +177,24 @@ Proof.
     apply Hb. 
 Qed.
 
+Theorem if_false: forall b c1 c2,
+  bequiv b <{false}> ->
+  cequiv
+    <{ if b then c1 else c2 end }>
+    c2.
+Proof.
+  intros b c1 c2 Hb.
+  split; intros H.
+  - inversion H. subst.
+    + unfold bequiv in Hb. simpl in Hb.
+      rewrite Hb in H5.
+      discriminate.
+    + assumption.
+  - apply E_IfFalse.
+    unfold bequiv in Hb. simpl in Hb.
+    apply Hb. assumption. 
+Qed.
+
 Theorem while_unroll : forall b c,
   cequiv
     <{ while b do c end }>
@@ -200,7 +214,7 @@ Proof.
 Qed.
 
 (* exercise 2.6, part 1 *)
-Lemma concat_associative: forall c c' c'',
+Lemma concat_assoc: forall c c' c'',
   cequiv <{(c; c'); c''}> <{c; (c'; c'')}>.
 Proof.
   intros c c' c'' st st'.  
@@ -218,18 +232,17 @@ Proof.
     assumption. assumption. assumption.
 Qed.
 
-(* exercise 2.6, part 2 *)
-(* Lemma concat_not_commutative: exists c c',
-  cequiv <{c; c'}> <{c'; c}> = False.
+(* exercise 2.6, part 2
+Lemma concat_not_commutative: exists c c',
+  ~(cequiv <{c; c'}> <{c'; c}>).
 Proof.
   exists <{ x := 2 }>.
   exists <{ x := 1 }>.
-  unfold cequiv.
-  intros.
-  apply (iff_and in H.
+  intros Hf.
+  unfold cequiv in Hf.
   inversion H.
   
-Qed. *)
+Qed *)
 
 (* exercise 2.7 *)
 Lemma repeat_unroll: forall b c, 
@@ -251,20 +264,83 @@ Proof.
       apply E_IfFalse. assumption. assumption.
 Qed.
 
-(* exercise 2.8 *)
-Lemma repeat_equiv_while : forall b c st st',
-  [c, st] ~> st' ->
-  beval st' b = true ->
-
-  [ c; while ~b do c end, st ] ~> st' <-> 
-  [ repeat c until b end, st ] ~> st'.
+Lemma while_true_nonterm : forall b c st st',
+  bequiv b <{true}> ->
+  ~[ while b do c end, st ] ~> st'.
 Proof.
-  intros. split; intros.
-  - apply E_Repeat with st'.
-    right. split. exact H. exact H0.
-  - apply E_Concat with st'.
-    exact H. apply E_While with st'.
-    right. split. apply bev_not_true_iff_false.
-    rewrite <- H0. apply bev_negb_involutive.
+  intros.
+  intros Hf.
+  remember <{ while b do c end }> as cw eqn:Heqcw.
+  induction Hf;
+  inversion Heqcw; subst; clear Heqcw.
+  - unfold bequiv in H.
+    rewrite H in H0. discriminate.
+  - apply IHHf2. reflexivity.
+Qed.
+
+Theorem ceval_deterministic: forall c st st1 st2,
+     [c, st] ~> st1 ->
+     [c, st] ~> st2 ->
+     st1 = st2.
+Proof.
+  intros c st st1 st2 E1 E2.
+  generalize dependent st2.
+  induction E1; intros st2 E2; inversion E2; subst.
+  - (* E_Skip *) reflexivity.
+  - (* E_Asgn *) reflexivity.
+  - (* E_Seq *)
+    rewrite (IHE1_1 st''0 H1) in *.
+    apply IHE1_2. assumption.
+  - (* E_IfTrue, b evaluates to true *)
+      apply IHE1. assumption.
+  - (* E_IfTrue,  b evaluates to false (contradiction) *)
+      rewrite H in H5. discriminate.
+  - (* E_IfFalse, b evaluates to true (contradiction) *)
+      rewrite H in H5. discriminate.
+  - (* E_IfFalse, b evaluates to false *)
+      apply IHE1. assumption.
+  - (* E_WhileFalse, b evaluates to false *)
+    reflexivity.
+  - (* E_WhileFalse, b evaluates to true (contradiction) *)
+    rewrite H in H2. discriminate.
+  - (* E_WhileTrue, b evaluates to false (contradiction) *)
+    rewrite H in H4. discriminate.
+  - (* E_WhileTrue, b evaluates to true *)
+    rewrite (IHE1_1 st''0 H3) in *.
+    apply IHE1_2. assumption.
+  - (* E_RepeatTrue, b evaluates to true *) 
+    rewrite (IHE1 st2 H2) in *.
+    reflexivity.
+  - (* E_RepeatTrue, b evaluates to false (contradiction) *) 
+    rewrite (IHE1 st'' H2) in *.
+    rewrite H in H3. discriminate.
+  - (* E_RepeatFalse, b evaluates to true (contradiction) *) 
+    rewrite (IHE1_1 st2 H2) in *.
+    rewrite H in H5. discriminate.
+  - (* E_RepeatFalse, b evaluates to false *) 
+    rewrite (IHE1_1 st''0 H2) in *.
+    rewrite (IHE1_2 st2 H6) in *.
     reflexivity.
 Qed.
+
+(* exercise 2.8 *)
+Theorem repeat_equiv_while : forall b c,
+  let r := <{repeat c until b end}> in
+  let w := <{c; while ~b do c end}> in
+  cequiv <{r}> <{w}>.
+Proof.
+  intros. 
+  split; intros.
+  - inversion H; subst.
+    + apply E_Concat with st'. assumption.
+      apply E_WhileFalse. apply bev_not_true_iff_false.
+      rewrite <- H5. apply bev_negb_involutive.
+    + admit.
+  - inversion H. subst.
+    inversion H5. subst.
+    + apply E_RepeatTrue. assumption.
+      apply bev_not_true_iff_false in H6.
+      rewrite <- H6. symmetry.
+      apply bev_negb_involutive.
+    + admit.
+Admitted.
