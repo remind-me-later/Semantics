@@ -4,3 +4,5 @@ map.v
 state.v
 aexp.v
 bexp.v
+small_step.v
+big_step.v

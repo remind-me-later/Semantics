@@ -1,6 +1,7 @@
 From Coq Require Import Bool.Bool.
 From Coq Require Import Strings.String.
 From Coq Require Import Setoids.Setoid.
+From Coq Require Import Logic.FunctionalExtensionality.
 
 Definition total_map (A : Type) := string -> A.
 
@@ -9,9 +10,6 @@ Definition t_empty {A : Type} (v : A) : total_map A :=
 
 Definition t_update {A : Type} (m : total_map A) (x : string) (v : A) :=
   fun x' => if eqb x x' then v else m x'.
-
-Definition map_equiv {A : Type} (m m': total_map A) (x : string) :=
-  m x = m' x.
 
 Module MapNotations.
 
@@ -51,27 +49,26 @@ Proof.
   reflexivity.
 Qed.
 
-(* functional extensionality? *)
-Lemma t_update_shadow : forall (A : Type) (m : total_map A) x y v1 v2,
-  map_equiv (x !-> v2 ; x !-> v1 ; m) (x !-> v2 ; m) y.
+Lemma t_update_shadow : forall (A : Type) (m : total_map A) x v1 v2,
+  (x !-> v2 ; x !-> v1 ; m) = (x !-> v2 ; m).
 Proof.
   intros.
-  unfold map_equiv.
+  apply functional_extensionality.
+  intros.
   unfold t_update.
-  induction (eqb x y);
+  induction (x =? x0)%string; 
   reflexivity.
 Qed.
 
-Theorem t_update_same : forall (A : Type) (m : total_map A) x y,
-  map_equiv (x !-> m x ; m) m y.
+Theorem t_update_same : forall (A : Type) (m : total_map A) x,
+  (x !-> m x ; m) = m.
 Proof.
   intros.
-  unfold map_equiv.
+  apply functional_extensionality.
+  intros.
   unfold t_update.
-  destruct (eqb_eq x y).
-  induction (eqb x y).
-  rewrite H.
-  reflexivity.
-  reflexivity.
+  destruct (eqb_eq x x0).
+  induction (x =? x0)%string.
+  rewrite H; reflexivity.
   reflexivity.
 Qed.
