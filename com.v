@@ -6,7 +6,7 @@ From Coq Require Import Bool.Bool.
 From Coq Require Import Arith.EqNat. Import Nat.
 
 Inductive com : Type :=
-  | CNop
+  | CSkip
   | CAsgn (x : string) (a : aexp)
   | CSeq (c1 c2 : com)
   | CIf (b : bexp) (c1 c2 : com)
@@ -38,7 +38,7 @@ Notation "x && y" := (BAnd x y) (in custom com at level 80, left associativity).
 Notation "'~' b" := (BNot b) (in custom com at level 75, right associativity).
 
 Notation "'skip'" :=
-         CNop (in custom com at level 0) : com_scope.
+         CSkip (in custom com at level 0) : com_scope.
 Notation "x := y" :=
          (CAsgn x y)
             (in custom com at level 0, x constr at level 0,
