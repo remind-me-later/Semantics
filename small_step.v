@@ -117,89 +117,66 @@ Inductive small_step : (com * state) -> (com * state) -> Prop :=
 where "'[' c ',' st ']' '.>' '[' c1 ',' st1 ']'"
   := (small_step (c,st) (c1,st1)).
 
-Definition relation (X : Type) := X -> X -> Prop.
-Inductive multi {X : Type} (R : relation X) : relation X :=
-| multi_refl : forall (x : X), multi R x x
-| multi_step : forall (x y z : X),
+From Coq Require Import Relations.Relation_Definitions.
+
+Inductive star {X : Type} (R : relation X) : relation X :=
+| star_step : forall (x y : X), R x y -> star R x y 
+| star_refl : forall (x : X), star R x x
+| star_trans : forall (x y z : X),
                   R x y ->
-                  multi R y z ->
-                  multi R x z.
+                  star R y z ->
+                  star R x z.
 
 Theorem multi_R : forall (X : Type) (R : relation X) (x y : X),
-    R x y -> (multi R) x y.
+    R x y -> (star R) x y.
 Proof.
-  intros X R x y H.
-  apply multi_step with y. apply H. apply multi_refl.
+    intros X R x y H.
+    apply star_trans
+    with y. apply H. apply star_refl.
 Qed.
 
 Theorem multi_trans : forall (X : Type) (R : relation X) (x y z : X),
-      multi R x y ->
-      multi R y z ->
-      multi R x z.
+      star R x y ->
+      star R y z ->
+      star R x z.
 Proof.
   intros X R x y z G H.
   induction G.
-    - (* multi_refl *) assumption.
-    - (* multi_step *)
-      apply multi_step with y. assumption.
+    - apply star_trans with y. assumption.
+      assumption.
+    - assumption.
+    - apply star_trans with y. assumption.
       apply IHG. assumption.
 Qed.
 
-Theorem astep_deterministic: forall st a1 a2 a3,
-    astep st a1 a2 ->
-    astep st a1 a3 ->
-    a2 = a3.
-Proof.
-Admitted.
-
-
-Definition deterministic {X: Type} (R: relation X) :=
-  forall x y1 y2 : X, R x y1 -> R x y2 -> y1 = y2. 
-
-Theorem step_deterministic:
-  deterministic small_step.
-Proof.
-  unfold deterministic. intros x y1 y2 Hy1 Hy2.
-  generalize dependent y2.
-  induction Hy1.
-  - intros. inversion Hy2; subst. reflexivity.
-  - intros. inversion Hy2; subst.
-    + assert (a1' = a1'0). 
-      apply astep_deterministic with st a1.
-      assumption. assumption.
-      rewrite H0. reflexivity.
-    + inversion H.
-  - intros. inversion Hy2; subst.
-    + inversion H3.
-    + reflexivity.
-Admitted.
-
-Notation "'[' c ','  st ']' '*>' '[' c1 ',' st1 ']'" :=
-  (multi small_step (c,st) (c1, st1))
+Notation "'[' c ','  st ']' '->*' '[' c1 ',' st1 ']'" :=
+  (star small_step (c,st) (c1, st1))
   (at level 40, c custom com at level 99, c1 custom com at level 99,
     st constr, st1 constr at next level).
 
-Theorem eq_final : forall st st1,
-    [skip, st] *> [skip, st1] ->
-    st = st1.
+Require Import Coq.Program.Equality.
+
+Theorem skip_some_skip_other : forall st1 st2,
+    [skip, st1] ->* [skip, st2] ->
+    st1 = st2.
 Admitted.
 
 (* Lemma 2.19 *)
 Theorem decons_seq : forall c1 c2 st st2 st1, 
-    [c1; c2, st] *> [skip, st2] ->
-    [c1, st] *> [skip, st1] ->
-    [c2, st1] *> [skip, st2].
+    [c1; c2, st] ->* [skip, st2] ->
+    [c1, st] ->* [skip, st1] ->
+    [c2, st1] ->* [skip, st2].
 Proof.
     intros.
-    induction c1.
-    apply eq_final in H0.
-    rewrite <- H0.
-    inversion H; subst.
-    assert (small_step (<{skip; c2}>, st1) (<{c2}>, st1)).
-    apply SS_SeqFinish.
-    apply (multi_step small_step (<{skip; skip; c2}>, st1)) in H.
-    assumption.
-    admit.
-    rewrite H0 in H1.
+    dependent induction H.
+    - inversion H; subst.
+      apply skip_some_skip_other in H0.
+      inversion H0.
+      apply star_refl.
+    - apply IHstar with c1 st; clear IHstar.
+      inversion H; subst.
+       
+    
+
 Qed.
     
