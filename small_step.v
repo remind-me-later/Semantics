@@ -159,7 +159,14 @@ Require Import Coq.Program.Equality.
 Theorem skip_some_skip_other : forall st1 st2,
     [skip, st1] ->* [skip, st2] ->
     st1 = st2.
-Admitted.
+Proof.
+    intros. dependent induction H.
+    - inversion H. reflexivity.
+    - reflexivity.
+    - apply IHstar. 
+      inversion H. reflexivity.
+      reflexivity. 
+Qed.
 
 (* Lemma 2.19 *)
 Theorem decons_seq : forall c1 c2 st st2 st1, 
@@ -173,10 +180,7 @@ Proof.
       apply skip_some_skip_other in H0.
       inversion H0.
       apply star_refl.
-    - apply IHstar with c1 st; clear IHstar.
-      inversion H; subst.
-       
-    
-
-Qed.
-    
+    - dependent destruction H.
+      apply IHstar  with c1' st'; clear IHstar.
+      reflexivity. reflexivity.
+Admitted.
