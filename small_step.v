@@ -114,6 +114,10 @@ Inductive small_step : (com * state) -> (com * state) -> Prop :=
   [while b1 do c1 end, st]
   .>
   [if b1 then c1; while b1 do c1 end else skip end, st]
+| SS_Repeat : forall st b1 c1,
+  [repeat c1 until b1 end, st]
+  .>
+  [c1; if b1 then skip else repeat c1 until b1 end end, st]
 where "'[' c ',' st ']' '.>' '[' c1 ',' st1 ']'"
   := (small_step (c,st) (c1,st1)).
 
@@ -183,4 +187,45 @@ Proof.
     - dependent destruction H.
       apply IHstar  with c1' st'; clear IHstar.
       reflexivity. reflexivity.
+ 
 Admitted.
+
+
+(* Exercise 2.21 *)
+Theorem left_right_seq : forall c1 c2 st st1, 
+    [c1, st] ->* [skip, st1] ->
+    [c1; c2, st] ->* [skip; c2, st1].
+Proof.
+    intros.
+    dependent induction H.
+    - apply star_step.
+      apply SS_SeqStep.
+      assumption.
+    - apply star_refl.
+    - induction y.
+      apply IHstar. clear IHstar.
+      dependent destruction H.
+      reflexivity.
+      
+Admitted.
+
+Theorem ss_eval_deterministic: forall c st st1 st2,
+     small_step (c, st) (<{skip}>, st1) ->
+     small_step (c, st) (<{skip}>, st2) ->
+     st1 = st2.
+Proof.
+  intros c st st1 st2 E1 E2.
+  dependent induction E1; dependent induction E2; reflexivity.
+Qed.
+
+Definition ss_equiv (c1 c2 : com) : Prop :=
+  forall (st st' : state),
+    ([ c1, st ] ->* [skip, st']) <-> ([ c2, st ] ->* [skip, st']).
+
+(* Exercise 2.21 *)
+Theorem s_equiv_s_skip : forall c1,
+    ss_equiv <{c1; skip}> <{c1}>.
+Proof.
+    intros.
+    split; intros.
+    - apply left_right_seq .
